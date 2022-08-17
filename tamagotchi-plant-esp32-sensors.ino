@@ -11,17 +11,25 @@ const byte DHT22_PIN = 27;
 const byte SOIL_MOISTURE_PIN = 13;
 
 // Object declarations
+hw_timer_t * timer = NULL;      // Hardware timer
 DHTStable DHT;
 BH1750 lightMeter;
-TFT_eSPI tft = TFT_eSPI(); 
+TFT_eSPI tft = TFT_eSPI();
+
+//Global variables
+float hum;
+float temp;
+float light;
+float soilMoisture;
+bool needsToMeasure = false;
 
 void takeMeasurement(){
   DHT.read22(DHT22_PIN);
-  float hum = DHT.getHumidity();
-  float temp = DHT.getTemperature();
-  float light = lightMeter.readLightLevel();
+  hum = DHT.getHumidity();
+  temp = DHT.getTemperature();
+  light = lightMeter.readLightLevel();
   int soilRead = analogRead(SOIL_MOISTURE_PIN);
-  float soilMoisture = map(soilRead, 0, 4095, 100, 0);
+  soilMoisture = map(soilRead, 0, 4095, 100, 0);
   Serial.println("Humedad: " + String(soilMoisture) + "%\t\t" + String(soilRead));
   Serial.println("Temperatura: " + String(temp) + "°C\t\tHumedad: " + String(hum) + "%\t\tLuminosidad: " + String(light) + "lx");
   
@@ -39,6 +47,10 @@ void takeMeasurement(){
   tft.println("Humedad tierra: " + String(soilMoisture) + "%");
 }
 
+void IRAM_ATTR onTimer(){
+  needsToMeasure = true;
+}
+
 void setup() {
   // Pin modes
   pinMode(TEST_LED, OUTPUT);
@@ -47,18 +59,6 @@ void setup() {
   // Init Serial port
   Serial.begin(115200);
   Serial.println("Init...");
-
-  // Init I2C
-  Wire.begin();
-
-  //Init light meter
-  while(!lightMeter.begin()){
-    Serial.println("Error on BH1750 init...");
-    digitalWrite(TEST_LED, HIGH);
-    delay(500);
-    digitalWrite(TEST_LED, LOW);
-    delay(500);
-  }
 
   //Init screen
   tft.init();
@@ -70,9 +70,29 @@ void setup() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   // We can now plot text on screen using the "print" class
   tft.println("Hola mundo :)\n");
+  tft.println("Inicializando...");
+
+  // Init I2C
+  Wire.begin();
+  //Init light meter
+  while(!lightMeter.begin()){
+    Serial.println("Error on BH1750 init...");
+    digitalWrite(TEST_LED, HIGH);
+    delay(500);
+    digitalWrite(TEST_LED, LOW);
+    delay(500);
+  }
+
+  //Timer init
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &onTimer, true);
+  timerAlarmWrite(timer, 2500000, true);
+  timerAlarmEnable(timer);
 }
 
 void loop() {
-  delay(2500);
-  takeMeasurement();
+  if(needsToMeasure){
+    takeMeasurement();
+    needsToMeasure = false;
+  }
 }

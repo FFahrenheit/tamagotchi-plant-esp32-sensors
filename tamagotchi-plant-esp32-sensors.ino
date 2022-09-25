@@ -11,11 +11,13 @@
 
 #include "assets/ok.h";
 #include "assets/dashboard.h";
+#include "assets/intro.h"
 #include "assets/font.h"
 
 void sendData();
 void setpointsConfig();
 void drawDashboard();
+void displayAnimation();
 
 //Client config
 String MY_PRIVATE_ID = "1";
@@ -27,7 +29,8 @@ const byte DHT22_PIN = 27;
 const byte SOIL_MOISTURE_PIN = 33;
 
 // Object declarations
-hw_timer_t * timer = NULL;      // Hardware timer
+hw_timer_t * timer = NULL;      // Hardware 
+hw_timer_t * timer2 = NULL;      // Hardware timer
 DHTStable DHT;
 BH1750 lightMeter;
 TFT_eSPI tft = TFT_eSPI();
@@ -40,10 +43,16 @@ float hum;
 float temp;
 float light;
 float soilMoisture;
+
 bool needsToMeasure = false;
+bool showAnimation = false; 
+bool animationDisplayed = false;
 
 //Set points
-double max_hum = 0.0f, min_hum = 0.0f, max_temp = 0.0f, min_temp = 0.0f;
+double max_hum = 80.0f, min_hum = 20.0f, 
+       max_temp = 35.0f, min_temp = 20.0f, 
+       max_lum = 1000.0f, min_lum = 5.0F, 
+       max_humt = 80.0f, min_humt = 10.0f;
 
 char *redes[2][2] = {
   {"TheCoolestWiFiLM", "LopezMurillo128"},
@@ -59,8 +68,10 @@ void takeMeasurement(){
   soilMoisture = map(soilRead, 0, 4095, 100, 0);
   Serial.println("Humedad: " + String(soilMoisture) + "%\t\t" + String(soilRead));
   Serial.println("Temperatura: " + String(temp) + "°C\t\tHumedad: " + String(hum) + "%\t\tLuminosidad: " + String(light) + "lx");
-
-  drawDashboard();
+  if(!showAnimation){
+    drawDashboard();  
+  }
+  
   sendData();
 }
 
@@ -68,11 +79,13 @@ void IRAM_ATTR onTimer(){
   needsToMeasure = true;
 }
 
+void IRAM_ATTR onTimer2(){
+  showAnimation = !showAnimation;
+}
+
 void setup() {
   // Pin modes
-  
   pinMode(SOIL_MOISTURE_PIN, INPUT);
-  
   pinMode(TEST_LED, OUTPUT);
   digitalWrite(TEST_LED, LOW);
   
@@ -83,25 +96,17 @@ void setup() {
   //Init screen
   tft.init();
   tft.setSwapBytes(true);
-  tft.fillScreen(TFT_BLACK);
-  tft.setFreeFont(&Arimo_Regular_24);
-  // Set "cursor" at top left corner of display (0,0) and select font 4
-  tft.setCursor(0, 40);
-  // Set the font colour to be white with a black background
+  tft.fillScreen(TFT_WHITE);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  // We can now plot text on screen using the "print" class
+  tft.pushImage(INTRO_OFFSET_X, INTRO_OFFSET_Y, INTRO_WIDTH, INTRO_HEIGHT, INTRO_SPRITE);
+  tft.setFreeFont(&FreeSans9pt7b);
+  tft.setCursor(0, 205);
+  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.println("Sensors setup...");
   
-  //tft.println("Hola mundo :)\n");
-  //tft.println("Inicializando...");
-
-  tft.pushImage(OK_OFFSET_X, OK_OFFSET_Y, OK_WIDTH, OK_HEIGHT, OK_SPRITE);
-  //drawDashboard();
-  delay(2500);
-
   // Init I2C
   Wire.begin(15, 5);
   //Init light meter
-  
   while(! lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE_2, 0x23, &Wire) ){
     Serial.println("Error on BH1750 init...");
     digitalWrite(TEST_LED, HIGH);
@@ -116,6 +121,12 @@ void setup() {
   timerAlarmWrite(timer, 2500000, true);
   timerAlarmEnable(timer);
 
+  timer2 = timerBegin(1, 80, true);
+  timerAttachInterrupt(timer2, &onTimer2, true);
+  timerAlarmWrite(timer2, 10000000, true);
+  timerAlarmEnable(timer2);
+  
+  tft.print("WiFi setup.");
   //WiFi Init
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
@@ -124,7 +135,6 @@ void setup() {
     Serial.print(red[0]);
     Serial.print("\t\tPassword: ");
     Serial.println(red[1]);
-
     wifiMulti.addAP(red[0], red[1]);
   }
 
@@ -134,6 +144,7 @@ void setup() {
   while (wifiMulti.run() != WL_CONNECTED) {
     delay(1250);
     Serial.print(++i); Serial.print(' ');
+    tft.print(".");
   }
   
   Serial.println('\n');
@@ -142,13 +153,16 @@ void setup() {
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP());
 
-  setpointsConfig();
+  //setpointsConfig();
 }
 
 void loop() {
   if(needsToMeasure){
     takeMeasurement();
     needsToMeasure = false;
+  }
+  if(showAnimation && !animationDisplayed){
+    displayAnimation();
   }
 }
 
@@ -220,25 +234,71 @@ void setpointsConfig(){
 }
 
 void drawDashboard(){
+  animationDisplayed = false;
   tft.setSwapBytes(true);
+  tft.setFreeFont(&Arimo_Regular_24);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.fillScreen(TFT_BLACK);
-  
+
   tft.pushImage(TEMP_OFFSET_X, TEMP_OFFSET_Y, TEMP_WIDTH, TEMP_HEIGHT, TEMP_SPRITE);
   tft.setCursor(20, 90);
   tft.print(String(temp) + "°C");
-  
+  if(temp > max_temp){
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.print("*");
+  }else if(temp < min_temp){
+    tft.setTextColor(TFT_BLUE, TFT_BLACK);
+    tft.print("*");
+  }
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.pushImage(SUN_OFFSET_X, SUN_OFFSET_Y, SUN_WIDTH, SUN_HEIGHT, SUN_SPRITE);
   String luminosidad = String(light);
   int offsetX = (luminosidad.length() - 3) * 10;
+  if(light > max_lum){
+    offsetX += 10;
+  }
   tft.setCursor(160 - offsetX, 90);
   tft.print(luminosidad + "lx");
+  if(light > max_lum){
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.print("*");
+  }else if(light < min_lum){
+    tft.setTextColor(TFT_BLUE, TFT_BLACK);
+    tft.print("*");
+  }
   
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.pushImage(HUM_OFFSET_X, HUM_OFFSET_Y, HUM_WIDTH, HUM_HEIGHT, HUM_SPRITE);
   tft.setCursor(20, 210);
   tft.print(String(hum) + "%");
-  
+  if(hum > max_lum){
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.print("*");
+  }else if(hum < min_lum){
+    tft.setTextColor(TFT_BLUE, TFT_BLACK);
+    tft.print("*");
+  }
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.pushImage(HUMT_OFFSET_X, HUMT_OFFSET_Y, HUMT_WIDTH, HUMT_HEIGHT, HUMT_SPRITE);
-  tft.setCursor(140, 210);
+  if(soilMoisture > max_humt){
+    offsetX = 10;
+  }else{
+    offsetX = 0;
+  }
+  tft.setCursor(140 - offsetX, 210);
   tft.print(String(soilMoisture) + "%");
+  if(soilMoisture > max_humt){
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.print("*");
+  }else if(soilMoisture < min_humt){
+    tft.setTextColor(TFT_BLUE, TFT_BLACK);
+    tft.print("*");
+  }
+}
+
+void displayAnimation(){
+  tft.fillScreen(TFT_BLACK);
+  animationDisplayed = true;
 }

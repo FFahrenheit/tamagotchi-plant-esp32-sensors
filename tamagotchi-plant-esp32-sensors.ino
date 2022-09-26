@@ -69,6 +69,8 @@ bool showAnimation = false;  // Intercambia entre animacion / estado
 bool animationDisplayed = false; // La animacion ya se mostró?
 bool measureDisplayed = false; // Las mediciones ya se actualizaron?
 
+
+/*   INTERRUPCIONES    */
 const byte INTERRUPT_PIN = 32;
 const byte TOUCH_PIN = 12;
 const byte INT_LED = 21;
@@ -106,6 +108,60 @@ void initInterrupt(){
   touchAttachInterrupt(TOUCH_PIN, touched, 20);
 }
 
+/*     DUAL CORE PROCESSING    */
+TaskHandle_t TaskSensors;
+TaskHandle_t TaskScreen;
+
+void taskSensorCode(void * pvParameter){
+  Serial.print("Senssor Task running on core ");
+  Serial.println(xPortGetCoreID());
+  
+  while(true){
+    if(needsToMeasure){
+      takeMeasurement();
+      needsToMeasure = false;
+    }
+    delay(100);
+  }
+}
+
+void taskScreenCode(void * pvParameter){
+  Serial.print("Screen Task running on core ");
+  Serial.println(xPortGetCoreID());
+  
+  while(true){
+    if(showAnimation){
+      displayAnimation();
+    }else{
+      drawDashboard();
+    }
+    delay(100);
+  }
+}
+
+void createTasks(){
+    //create a task that will be executed in the Task1code() function, with priority 1 and executed on core 0
+  xTaskCreatePinnedToCore(
+                    taskSensorCode,   /* Task function. */
+                    "Task1",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &TaskSensors,      /* Task handle to keep track of created task */
+                    0);          /* pin task to core 0 */                  
+  delay(500); 
+
+  //create a task that will be executed in the Task2code() function, with priority 1 and executed on core 1
+  xTaskCreatePinnedToCore(
+                    taskScreenCode,   /* Task function. */
+                    "Task2",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &TaskScreen,      /* Task handle to keep track of created task */
+                    1);          /* pin task to core 1 */
+    delay(500);
+}
 
 //Set points
 double max_hum = 80.0f, min_hum = 20.0f, 
@@ -250,21 +306,12 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   //setpointsConfig();
+  
+  createTasks();
 }
 
 void loop() {
-  if(needsToMeasure){
-    takeMeasurement();
-    needsToMeasure = false;
-  }
-
-  Serial.println(showAnimation);
-  
-  if(showAnimation){
-    displayAnimation();
-  }else{
-    drawDashboard();
-  }
+  digitalWrite(INT_LED, showAnimation);
 }
 
 void sendData(){

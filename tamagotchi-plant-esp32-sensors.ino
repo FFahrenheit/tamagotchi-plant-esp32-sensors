@@ -10,6 +10,7 @@
 #include <HTTPClient.h>
 
 #include "assets/ok.h";
+#include "assets/encandilado.h";
 #include "assets/dashboard.h";
 #include "assets/intro.h"
 #include "assets/font.h"
@@ -54,10 +55,43 @@ double max_hum = 80.0f, min_hum = 20.0f,
        max_lum = 1000.0f, min_lum = 5.0F, 
        max_humt = 80.0f, min_humt = 10.0f;
 
+enum EstadoPlanta{
+  E_congelado,
+  E_caliente,
+  E_seco,
+  E_sofocado,
+  E_ahogado,
+  E_vampiro,
+  E_encandilado,
+  E_feliz
+};
+
+EstadoPlanta estado = E_feliz;
+EstadoPlanta estadoDibujado = E_feliz;
 char *redes[2][2] = {
   {"TheCoolestWiFiLM", "LopezMurillo128"},
   {"WifiLM", "LopezMurillo128"}
 };
+
+void updateStatus(){
+  if(temp > max_temp){
+    estado = E_caliente;
+  }else if(temp < min_temp){
+    estado = E_congelado;
+  }else if(light > max_lum){
+    estado = E_encandilado;
+  }else if(light < min_lum){
+    estado = E_vampiro;
+  }else if(hum < min_hum || soilMoisture < min_humt){
+    estado = E_seco;
+  }else if(hum > max_hum){
+    estado = E_sofocado;
+  }else if(soilMoisture > max_humt){
+    estado = E_ahogado;
+  }else{
+    estado = E_feliz;
+  }
+}
 
 void takeMeasurement(){
   int soilRead = analogRead(SOIL_MOISTURE_PIN);
@@ -68,6 +102,8 @@ void takeMeasurement(){
   soilMoisture = map(soilRead, 0, 4095, 100, 0);
   Serial.println("Humedad: " + String(soilMoisture) + "%\t\t" + String(soilRead));
   Serial.println("Temperatura: " + String(temp) + "°C\t\tHumedad: " + String(hum) + "%\t\tLuminosidad: " + String(light) + "lx");
+  updateStatus();
+  
   if(!showAnimation){
     drawDashboard();  
   }
@@ -161,7 +197,7 @@ void loop() {
     takeMeasurement();
     needsToMeasure = false;
   }
-  if(showAnimation && !animationDisplayed){
+  if(showAnimation){
     displayAnimation();
   }
 }
@@ -299,6 +335,21 @@ void drawDashboard(){
 }
 
 void displayAnimation(){
-  tft.fillScreen(TFT_BLACK);
-  animationDisplayed = true;
+  if(!animationDisplayed || estado != estadoDibujado){
+    tft.fillScreen(TFT_BLACK);
+    switch(estado){
+      case E_feliz:
+        tft.pushImage(OK_OFFSET_X, OK_OFFSET_Y, OK_WIDTH, OK_HEIGHT, OK_SPRITE);
+        break;
+      case E_encandilado:
+        tft.pushImage(ENCANDILADO_OFFSET_X, ENCANDILADO_OFFSET_Y, ENCANDILADO_WIDTH, ENCANDILADO_HEIGHT, ENCANDILADO_SPRITE);
+        break;
+      default:
+        tft.pushImage(INTRO_OFFSET_X, INTRO_OFFSET_Y, INTRO_WIDTH, INTRO_HEIGHT, INTRO_SPRITE);
+        break;    
+    }
+    estadoDibujado = estado;
+    animationDisplayed = true;
+  }
+  
 }

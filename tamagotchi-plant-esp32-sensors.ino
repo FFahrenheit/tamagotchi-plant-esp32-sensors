@@ -34,16 +34,29 @@ String SERVER_ADDRESS = "http://64.227.14.152:3000/api/planta/" + MY_PRIVATE_ID;
 const byte TEST_LED = 2;
 const byte DHT22_PIN = 27;
 const byte SOIL_MOISTURE_PIN = 33;
+#define SDA_LIGHT 15
+#define SCL_LIGHT 5
+
+/*
+ * ST7789
+ * DC = 2
+ * RES = 4
+ * SCL = 18
+ * SDA = 23
+ * CS not implemented, BLK to air
+ */
+
 
 // Object declarations
-hw_timer_t * timer = NULL;      // Hardware 
-hw_timer_t * timer2 = NULL;      // Hardware timer
+hw_timer_t * timer = NULL;      // Hardware timer
+
+// Libraries
 DHTStable DHT;
 BH1750 lightMeter;
 TFT_eSPI tft = TFT_eSPI();
 WiFiMulti wifiMulti;
 WiFiClient wifiClient;
-
+HTTPClient http;
 
 //Global variables
 float hum;
@@ -51,9 +64,48 @@ float temp;
 float light;
 float soilMoisture;
 
-bool needsToMeasure = false;
-bool showAnimation = false; 
-bool animationDisplayed = false;
+bool needsToMeasure = false; // Bandera para tomar medidas
+bool showAnimation = false;  // Intercambia entre animacion / estado
+bool animationDisplayed = false; // La animacion ya se mostró?
+bool measureDisplayed = false; // Las mediciones ya se actualizaron?
+
+const byte INTERRUPT_PIN = 32;
+const byte TOUCH_PIN = 12;
+const byte INT_LED = 21;
+const int DEBOUNCE = 100;
+int lastMillis = 0;
+
+void IRAM_ATTR changeState(){
+  if(millis() - lastMillis > DEBOUNCE){ // Software debouncing
+    showAnimation = !showAnimation;
+    digitalWrite(INT_LED, showAnimation);
+ }
+ lastMillis = millis();
+}
+
+void touched(){
+  if(millis() - lastMillis > DEBOUNCE){ // Software debouncing
+    showAnimation = !showAnimation;
+    digitalWrite(INT_LED, showAnimation);
+ }
+ lastMillis = millis();
+}
+
+void IRAM_ATTR onTimer(){
+  needsToMeasure = true;
+}
+
+void initInterrupt(){
+  //Timer init
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &onTimer, true);
+  timerAlarmWrite(timer, 2500000, true);
+  timerAlarmEnable(timer);
+  
+  //attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), changeState, FALLING);
+  touchAttachInterrupt(TOUCH_PIN, touched, 20);
+}
+
 
 //Set points
 double max_hum = 80.0f, min_hum = 20.0f, 
@@ -61,6 +113,7 @@ double max_hum = 80.0f, min_hum = 20.0f,
        max_lum = 1000.0f, min_lum = 5.0F, 
        max_humt = 80.0f, min_humt = 10.0f;
 
+// Plant statuses
 enum EstadoPlanta{
   E_congelado,
   E_caliente,
@@ -72,11 +125,25 @@ enum EstadoPlanta{
   E_feliz
 };
 
+char * estados[8] = {
+  "Congelado",
+  "Caliente",
+  "Seco",
+  "Sofocado",
+  "Ahogado",
+  "Vampiro",
+  "Encandilado",
+  "Feliz"
+};
+
 EstadoPlanta estado = E_feliz;
 EstadoPlanta estadoDibujado = E_feliz;
-char *redes[2][2] = {
+
+// Networks
+char *redes[3][2] = {
   {"TheCoolestWiFiLM", "LopezMurillo128"},
-  {"WifiLM", "LopezMurillo128"}
+  {"WifiLM", "LopezMurillo128"},
+  {"Honor 10 Lite", "tommywashere"}
 };
 
 void updateStatus(){
@@ -97,6 +164,8 @@ void updateStatus(){
   }else{
     estado = E_feliz;
   }
+  Serial.print("Estado: ");
+  Serial.println(estados[estado]);
 }
 
 void takeMeasurement(){
@@ -108,28 +177,19 @@ void takeMeasurement(){
   soilMoisture = map(soilRead, 0, 4095, 100, 0);
   Serial.println("Humedad: " + String(soilMoisture) + "%\t\t" + String(soilRead));
   Serial.println("Temperatura: " + String(temp) + "°C\t\tHumedad: " + String(hum) + "%\t\tLuminosidad: " + String(light) + "lx");
+
+  measureDisplayed = false;
   updateStatus();
-  
-  if(!showAnimation){
-    drawDashboard();  
-  }
-  
   sendData();
-}
-
-void IRAM_ATTR onTimer(){
-  needsToMeasure = true;
-}
-
-void IRAM_ATTR onTimer2(){
-  showAnimation = !showAnimation;
 }
 
 void setup() {
   // Pin modes
   pinMode(SOIL_MOISTURE_PIN, INPUT);
   pinMode(TEST_LED, OUTPUT);
+  pinMode(INT_LED, OUTPUT);
   digitalWrite(TEST_LED, LOW);
+  digitalWrite(INT_LED, LOW);
   
   // Init Serial port
   Serial.begin(115200);
@@ -147,7 +207,7 @@ void setup() {
   tft.println("Sensors setup...");
   
   // Init I2C
-  Wire.begin(15, 5);
+  Wire.begin(SDA_LIGHT, SCL_LIGHT);
   //Init light meter
   while(! lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE_2, 0x23, &Wire) ){
     Serial.println("Error on BH1750 init...");
@@ -157,16 +217,7 @@ void setup() {
     delay(500);
   }
 
-  //Timer init
-  timer = timerBegin(0, 80, true);
-  timerAttachInterrupt(timer, &onTimer, true);
-  timerAlarmWrite(timer, 2500000, true);
-  timerAlarmEnable(timer);
-
-  timer2 = timerBegin(1, 80, true);
-  timerAttachInterrupt(timer2, &onTimer2, true);
-  timerAlarmWrite(timer2, 10000000, true);
-  timerAlarmEnable(timer2);
+  initInterrupt();
   
   tft.print("WiFi setup.");
   //WiFi Init
@@ -188,6 +239,9 @@ void setup() {
     Serial.print(++i); Serial.print(' ');
     tft.print(".");
   }
+
+  http.begin(wifiClient, SERVER_ADDRESS);  //Specify request destination
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
   Serial.println('\n');
   Serial.print("Connected to ");
@@ -203,19 +257,19 @@ void loop() {
     takeMeasurement();
     needsToMeasure = false;
   }
+
+  Serial.println(showAnimation);
   
   if(showAnimation){
     displayAnimation();
+  }else{
+    drawDashboard();
   }
 }
 
 void sendData(){
-  HTTPClient http;
   String body = "temperatura=" + String(temp) + "&humedad_ambiente=" + String(hum) + "&luminosidad=" + String(light) + "&humedad_tierra=" + String(soilMoisture);
   Serial.println(body); 
-
-  http.begin(wifiClient, SERVER_ADDRESS);  //Specify request destination
-  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
   int httpCode = http.PUT(body);               //Send the request
   Serial.println("Response: " + String(httpCode));
@@ -278,6 +332,10 @@ void setpointsConfig(){
 
 void drawDashboard(){
   animationDisplayed = false;
+  if(measureDisplayed){
+    return;
+  }
+  
   tft.setSwapBytes(true);
   tft.setFreeFont(&Arimo_Regular_24);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -339,9 +397,12 @@ void drawDashboard(){
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
     tft.print("*");
   }
+
+  measureDisplayed = true;
 }
 
 void displayAnimation(){
+  measureDisplayed = false;
   if(animationDisplayed && estado == estadoDibujado){
     return;
   }
@@ -377,6 +438,7 @@ void displayAnimation(){
       tft.pushImage(INTRO_OFFSET_X, INTRO_OFFSET_Y, INTRO_WIDTH, INTRO_HEIGHT, INTRO_SPRITE);
       break;    
   }
+  
   estadoDibujado = estado;
   animationDisplayed = true;
   

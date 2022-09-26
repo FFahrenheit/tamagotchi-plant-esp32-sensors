@@ -11,6 +11,12 @@
 
 #include "assets/ok.h";
 #include "assets/encandilado.h";
+#include "assets/vampiro.h";
+#include "assets/ahogado.h";
+#include "assets/caliente.h";
+#include "assets/congelado.h";
+#include "assets/seco.h";
+#include "assets/sofocado.h";
 #include "assets/dashboard.h";
 #include "assets/intro.h"
 #include "assets/font.h"
@@ -51,7 +57,7 @@ bool animationDisplayed = false;
 
 //Set points
 double max_hum = 80.0f, min_hum = 20.0f, 
-       max_temp = 35.0f, min_temp = 20.0f, 
+       max_temp = 32.0f, min_temp = 20.0f, 
        max_lum = 1000.0f, min_lum = 5.0F, 
        max_humt = 80.0f, min_humt = 10.0f;
 
@@ -197,6 +203,7 @@ void loop() {
     takeMeasurement();
     needsToMeasure = false;
   }
+  
   if(showAnimation){
     displayAnimation();
   }
@@ -308,10 +315,10 @@ void drawDashboard(){
   tft.pushImage(HUM_OFFSET_X, HUM_OFFSET_Y, HUM_WIDTH, HUM_HEIGHT, HUM_SPRITE);
   tft.setCursor(20, 210);
   tft.print(String(hum) + "%");
-  if(hum > max_lum){
+  if(hum > max_hum){
     tft.setTextColor(TFT_RED, TFT_BLACK);
     tft.print("*");
-  }else if(hum < min_lum){
+  }else if(hum < min_hum){
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
     tft.print("*");
   }
@@ -335,21 +342,42 @@ void drawDashboard(){
 }
 
 void displayAnimation(){
-  if(!animationDisplayed || estado != estadoDibujado){
-    tft.fillScreen(TFT_BLACK);
-    switch(estado){
-      case E_feliz:
-        tft.pushImage(OK_OFFSET_X, OK_OFFSET_Y, OK_WIDTH, OK_HEIGHT, OK_SPRITE);
-        break;
-      case E_encandilado:
-        tft.pushImage(ENCANDILADO_OFFSET_X, ENCANDILADO_OFFSET_Y, ENCANDILADO_WIDTH, ENCANDILADO_HEIGHT, ENCANDILADO_SPRITE);
-        break;
-      default:
-        tft.pushImage(INTRO_OFFSET_X, INTRO_OFFSET_Y, INTRO_WIDTH, INTRO_HEIGHT, INTRO_SPRITE);
-        break;    
-    }
-    estadoDibujado = estado;
-    animationDisplayed = true;
+  if(animationDisplayed && estado == estadoDibujado){
+    return;
   }
+  
+  tft.fillScreen(TFT_BLACK);
+  switch(estado){
+    case E_feliz:
+      tft.pushImage(OK_OFFSET_X, OK_OFFSET_Y, OK_WIDTH, OK_HEIGHT, OK_SPRITE);
+      break;
+    case E_encandilado:
+      tft.pushImage(ENCANDILADO_OFFSET_X, ENCANDILADO_OFFSET_Y, ENCANDILADO_WIDTH, ENCANDILADO_HEIGHT, ENCANDILADO_SPRITE);
+      break;
+    case E_vampiro:
+      tft.pushImage(VAMPIRO_OFFSET_X, VAMPIRO_OFFSET_Y, VAMPIRO_WIDTH, VAMPIRO_HEIGHT, VAMPIRO_SPRITE);
+      break;
+    case E_ahogado:
+      tft.pushImage(AHOGADO1_OFFSET_X, AHOGADO1_OFFSET_Y, AHOGADO1_WIDTH, AHOGADO1_HEIGHT, AHOGADO1_SPRITE);
+      tft.pushImage(AHOGADO2_OFFSET_X, AHOGADO2_OFFSET_Y, AHOGADO2_WIDTH, AHOGADO2_HEIGHT, AHOGADO2_SPRITE);
+      break;
+    case E_caliente:
+      tft.pushImage(CALIENTE_OFFSET_X, CALIENTE_OFFSET_Y, CALIENTE_WIDTH, CALIENTE_HEIGHT, CALIENTE_SPRITE);
+      break;
+    case E_congelado:
+      tft.pushImage(CONGELADO_OFFSET_X, CONGELADO_OFFSET_Y, CONGELADO_WIDTH, CONGELADO_HEIGHT, CONGELADO_SPRITE);
+      break;
+    case E_seco:
+      tft.pushImage(SECO_OFFSET_X, SECO_OFFSET_Y, SECO_WIDTH, SECO_HEIGHT, SECO_SPRITE);
+      break;
+    case E_sofocado:
+      tft.pushImage(SOFOCADO_OFFSET_X, SOFOCADO_OFFSET_Y, SOFOCADO_WIDTH, SOFOCADO_HEIGHT, SOFOCADO_SPRITE);
+      break;
+    default:
+      tft.pushImage(INTRO_OFFSET_X, INTRO_OFFSET_Y, INTRO_WIDTH, INTRO_HEIGHT, INTRO_SPRITE);
+      break;    
+  }
+  estadoDibujado = estado;
+  animationDisplayed = true;
   
 }

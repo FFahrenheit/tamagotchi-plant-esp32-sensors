@@ -121,7 +121,7 @@ void taskSensorCode(void * pvParameter){
       takeMeasurement();
       needsToMeasure = false;
     }
-    delay(100);
+    delay(20);
   }
 }
 
@@ -135,7 +135,7 @@ void taskScreenCode(void * pvParameter){
     }else{
       drawDashboard();
     }
-    delay(100);
+    delay(20);
   }
 }
 
@@ -227,9 +227,18 @@ void updateStatus(){
 void takeMeasurement(){
   int soilRead = analogRead(SOIL_MOISTURE_PIN);
   DHT.read22(DHT22_PIN);
-  hum = DHT.getHumidity();
-  temp = DHT.getTemperature();
-  light = lightMeter.readLightLevel();
+  float temporary_hum = DHT.getHumidity();
+  float temporary_temp = DHT.getTemperature();
+  float temporary_light = lightMeter.readLightLevel();
+  
+  if(temporary_hum > 0){
+    hum = temporary_hum;
+    temp = temporary_temp;    
+  }
+  if(temporary_light > 0){
+    light = temporary_light;
+  }
+  
   soilMoisture = map(soilRead, 0, 4095, 100, 0);
   Serial.println("Humedad: " + String(soilMoisture) + "%\t\t" + String(soilRead));
   Serial.println("Temperatura: " + String(temp) + "°C\t\tHumedad: " + String(hum) + "%\t\tLuminosidad: " + String(light) + "lx");

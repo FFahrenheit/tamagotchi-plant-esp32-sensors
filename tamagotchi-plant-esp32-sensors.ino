@@ -68,7 +68,7 @@ bool needsToMeasure = false; // Bandera para tomar medidas
 bool showAnimation = false;  // Intercambia entre animacion / estado
 bool animationDisplayed = false; // La animacion ya se mostró?
 bool measureDisplayed = false; // Las mediciones ya se actualizaron?
-
+int measuresCounter = 0;
 
 /*   INTERRUPCIONES    */
 const byte INTERRUPT_PIN = 32;
@@ -113,13 +113,18 @@ TaskHandle_t TaskSensors;
 TaskHandle_t TaskScreen;
 
 void taskSensorCode(void * pvParameter){
-  Serial.print("Senssor Task running on core ");
+  Serial.print("Sensor Task running on core ");
   Serial.println(xPortGetCoreID());
   
   while(true){
     if(needsToMeasure){
       takeMeasurement();
       needsToMeasure = false;
+      measuresCounter += 1;
+    }
+    if(measuresCounter >= 6){
+      setpointsConfig();
+      measuresCounter = 0;
     }
     delay(20);
   }
@@ -314,8 +319,7 @@ void setup() {
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP());
 
-  //setpointsConfig();
-  
+  setpointsConfig();
   createTasks();
 }
 
@@ -349,39 +353,85 @@ void sendData(){
   http.end();   //Close connection
 }
 
+double json2double(JSONVar jsonVar){
+  Serial.println(JSON.typeof(jsonVar));
+  String value = String((const char*)jsonVar);
+
+  Serial.println("- " + value);
+  if(value.indexOf(0) == '"'){
+    value.remove(0, 1);
+    value.remove(value.length() - 1, 1);
+    Serial.println("-- " + value);
+  }
+  Serial.print("--- ");
+  Serial.println(value.toDouble());
+  return value.toDouble();
+}
+
 void setpointsConfig(){
   HTTPClient http;
   http.begin(wifiClient, SERVER_ADDRESS + "/config");  //Specify request destination
   int httpCode;
+  int tries = 0;
   
   do{
     httpCode = http.GET();                  //Send the request
     Serial.println("Response: " + String(httpCode));
+    
+    tries += 1;
+    if (httpCode > 0) { //Check the returning code
+   
+      String payload = http.getString();   //Get the request response payload
+      JSONVar response = JSON.parse(payload);
+  
+      Serial.println(response);  
+      
+      if (JSON.typeof(response) != "undefined")
+      {
+        Serial.println(JSON.typeof(response)); // prints: object
+        Serial.println(response["max_temp"]);
+        Serial.println(json2double(response["max_temp"]));
+        
+        if(response.hasOwnProperty("max_temp")){
+          max_temp = json2double(response["max_temp"]);
+        }
+        if(response.hasOwnProperty("min_temp")){
+          min_temp = json2double(response["min_temp"]);
+        }
+        if(response.hasOwnProperty("max_hum")){
+          max_hum = json2double(response["max_hum"]);
+        }
+        if(response.hasOwnProperty("min_hum")){
+          min_hum = json2double(response["min_hum"]);
+        }
+        if(response.hasOwnProperty("max_lum")){
+          max_lum = json2double(response["max_lum"]);
+        }
+        if(response.hasOwnProperty("min_lum")){
+          min_lum = json2double(response["min_lum"]);
+        }
+        if(response.hasOwnProperty("max_humt")){
+          max_humt = json2double(response["max_humt"]);
+        }
+        if(response.hasOwnProperty("min_humt")){
+          min_humt = json2double(response["min_humt"]);
+        }
 
-  if (httpCode > 0) { //Check the returning code
- 
-    String payload = http.getString();   //Get the request response payload
-    JSONVar response = JSON.parse(payload);
-
-    if (JSON.typeof(response) != "undefined" && response.hasOwnProperty("max_temp"))
-    {
-      max_temp = (double) response["max_temp"];
-      min_temp = (double) response["min_temp"];
-      max_hum = (double) response["max_hum"];
-      min_hum = (double) response["min_hum"];
-
-      Serial.println("Maxima temperatura: " + String(max_temp));
-      Serial.println("Minima temperatura: " + String(min_temp));
-      Serial.println("Maxima humedad: " + String(max_hum));
-      Serial.println("Minima humedad: " + String(min_hum));
+        Serial.println("Maxima temperatura: " + String(max_temp));
+        Serial.println("Minima temperatura: " + String(min_temp));
+        Serial.println("Maxima humedad: " + String(max_hum));
+        Serial.println("Minima humedad: " + String(min_hum));
+        Serial.println("Maxima lumonisidad: " + String(max_lum));
+        Serial.println("Minima luminosidad: " + String(min_lum));
+        Serial.println("Maxima humedad tierra: " + String(max_humt));
+        Serial.println("Minima humedad tierra: " + String(min_humt));
+      }
+      else
+      {
+        Serial.println(response);
+      }
     }
-    else
-    {
-      Serial.println(response);
-    }
-  }
- 
-  }while(httpCode < 0);
+  }while(httpCode < 0 && tries < 3);
   
   http.end();   //Close connection
 }

@@ -70,6 +70,7 @@ bool needsToMeasure = false; // Bandera para tomar medidas
 bool showAnimation = false;  // Intercambia entre animacion / estado
 bool animationDisplayed = false; // La animacion ya se mostró?
 bool measureDisplayed = false; // Las mediciones ya se actualizaron?
+bool spritesDisplayed = false;
 int measuresCounter = 0;
 
 /*   INTERRUPCIONES    */
@@ -254,10 +255,12 @@ void takeMeasurement(){
   
   if(temporary_hum > 0){
     hum = temporary_hum;
-    temp = temporary_temp;    
   }
   if(temporary_light > 0){
     light = temporary_light;
+  }
+  if(temporary_temp > -10 && temporary_temp <= 125){
+    temp = temporary_temp;
   }
   
   soilMoisture = map(soilRead, 0, 4095, 100, 0);
@@ -304,8 +307,8 @@ void setup() {
     digitalWrite(TEST_LED, LOW);
     delay(500);
   }
-
   initInterrupt();
+  notificationSound();
   
   tft.print("WiFi setup.");
   //WiFi Init
@@ -336,7 +339,8 @@ void setup() {
   Serial.println(WiFi.SSID());              
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP());
-
+  notificationSound();
+  
   setpointsConfig();
   createTasks();
 }
@@ -458,13 +462,23 @@ void drawDashboard(){
   if(measureDisplayed){
     return;
   }
-  
+
   tft.setSwapBytes(true);
   tft.setFreeFont(&Arimo_Regular_24);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.fillScreen(TFT_BLACK);
+  
+  if(!spritesDisplayed){
+    tft.fillScreen(TFT_BLACK);
+    tft.pushImage(TEMP_OFFSET_X, TEMP_OFFSET_Y, TEMP_WIDTH, TEMP_HEIGHT, TEMP_SPRITE);
+    tft.pushImage(SUN_OFFSET_X, SUN_OFFSET_Y, SUN_WIDTH, SUN_HEIGHT, SUN_SPRITE);
+    tft.pushImage(HUM_OFFSET_X, HUM_OFFSET_Y, HUM_WIDTH, HUM_HEIGHT, HUM_SPRITE);
+    tft.pushImage(HUMT_OFFSET_X, HUMT_OFFSET_Y, HUMT_WIDTH, HUMT_HEIGHT, HUMT_SPRITE);
+    spritesDisplayed = true;
+  }
 
-  tft.pushImage(TEMP_OFFSET_X, TEMP_OFFSET_Y, TEMP_WIDTH, TEMP_HEIGHT, TEMP_SPRITE);
+  tft.fillRect(20, 70, 210, 45, TFT_BLACK);
+  tft.fillRect(20, 190, 210, 45, TFT_BLACK);
+  
   tft.setCursor(20, 90);
   tft.print(String(temp) + "°C");
   if(temp > max_temp){
@@ -476,7 +490,6 @@ void drawDashboard(){
   }
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.pushImage(SUN_OFFSET_X, SUN_OFFSET_Y, SUN_WIDTH, SUN_HEIGHT, SUN_SPRITE);
   String luminosidad = String(light);
   int offsetX = (luminosidad.length() - 3) * 10;
   if(light > max_lum){
@@ -493,7 +506,6 @@ void drawDashboard(){
   }
   
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.pushImage(HUM_OFFSET_X, HUM_OFFSET_Y, HUM_WIDTH, HUM_HEIGHT, HUM_SPRITE);
   tft.setCursor(20, 210);
   tft.print(String(hum) + "%");
   if(hum > max_hum){
@@ -505,7 +517,6 @@ void drawDashboard(){
   }
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.pushImage(HUMT_OFFSET_X, HUMT_OFFSET_Y, HUMT_WIDTH, HUMT_HEIGHT, HUMT_SPRITE);
   if(soilMoisture > max_humt){
     offsetX = 10;
   }else{
@@ -564,5 +575,5 @@ void displayAnimation(){
   
   estadoDibujado = estado;
   animationDisplayed = true;
-  
+  spritesDisplayed = false;
 }

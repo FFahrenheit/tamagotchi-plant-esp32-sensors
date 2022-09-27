@@ -20,6 +20,7 @@
 #include "assets/dashboard.h";
 #include "assets/intro.h"
 #include "assets/font.h"
+#include "assets/pitches.h"
 
 void sendData();
 void setpointsConfig();
@@ -34,6 +35,7 @@ String SERVER_ADDRESS = "http://64.227.14.152:3000/api/planta/" + MY_PRIVATE_ID;
 const byte TEST_LED = 2;
 const byte DHT22_PIN = 27;
 const byte SOIL_MOISTURE_PIN = 33;
+const byte BUZZER_PIN = 32;
 #define SDA_LIGHT 15
 #define SCL_LIGHT 5
 
@@ -200,6 +202,16 @@ char * estados[8] = {
 EstadoPlanta estado = E_feliz;
 EstadoPlanta estadoDibujado = E_feliz;
 
+void notificationSound(){
+  tone(BUZZER_PIN, NOTE_F6, 100);
+  delay(120);
+  noTone(BUZZER_PIN);
+  tone(BUZZER_PIN, NOTE_A6, 150);
+  delay(170);
+  noTone(BUZZER_PIN);
+  
+}
+
 // Networks
 char *redes[3][2] = {
   {"TheCoolestWiFiLM", "LopezMurillo128"},
@@ -208,6 +220,7 @@ char *redes[3][2] = {
 };
 
 void updateStatus(){
+  EstadoPlanta anterior = estado;
   if(temp > max_temp){
     estado = E_caliente;
   }else if(temp < min_temp){
@@ -224,6 +237,9 @@ void updateStatus(){
     estado = E_ahogado;
   }else{
     estado = E_feliz;
+  }
+  if(estado != E_feliz && anterior != estado){
+   notificationSound(); 
   }
   Serial.print("Estado: ");
   Serial.println(estados[estado]);
@@ -258,6 +274,8 @@ void setup() {
   pinMode(SOIL_MOISTURE_PIN, INPUT);
   pinMode(TEST_LED, OUTPUT);
   pinMode(INT_LED, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  notificationSound();
   digitalWrite(TEST_LED, LOW);
   digitalWrite(INT_LED, LOW);
   
@@ -354,18 +372,17 @@ void sendData(){
 }
 
 double json2double(JSONVar jsonVar){
-  Serial.println(JSON.typeof(jsonVar));
-  String value = String((const char*)jsonVar);
-
-  Serial.println("- " + value);
-  if(value.indexOf(0) == '"'){
-    value.remove(0, 1);
-    value.remove(value.length() - 1, 1);
-    Serial.println("-- " + value);
+  if(JSON.typeof(jsonVar) == "string"){
+    String value = String((const char*)jsonVar);
+  
+    if(value.indexOf(0) == '"'){
+      value.remove(0, 1);
+      value.remove(value.length() - 1, 1);
+    }
+    return value.toDouble(); 
   }
-  Serial.print("--- ");
-  Serial.println(value.toDouble());
-  return value.toDouble();
+
+  return (double) jsonVar;
 }
 
 void setpointsConfig(){

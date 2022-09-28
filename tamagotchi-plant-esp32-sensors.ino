@@ -307,7 +307,6 @@ void setup() {
     digitalWrite(TEST_LED, LOW);
     delay(500);
   }
-  initInterrupt();
   notificationSound();
   
   tft.print("WiFi setup.");
@@ -333,6 +332,7 @@ void setup() {
 
   http.begin(wifiClient, SERVER_ADDRESS);  //Specify request destination
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  initInterrupt();
   
   Serial.println('\n');
   Serial.print("Connected to ");
@@ -353,7 +353,7 @@ void sendData(){
   String body = "temperatura=" + String(temp) + "&humedad_ambiente=" + String(hum) + "&luminosidad=" + String(light) + "&humedad_tierra=" + String(soilMoisture);
   Serial.println(body); 
   
-  int httpCode = http.PUT(body);               //Send the request
+  int httpCode = http.PUT(body);                    //Send the request
   Serial.println("Response: " + String(httpCode));
 
 
@@ -372,7 +372,7 @@ void sendData(){
     }
   }
  
-  http.end();   //Close connection
+  //http.end();   //Close connection
 }
 
 double json2double(JSONVar jsonVar){
@@ -390,19 +390,19 @@ double json2double(JSONVar jsonVar){
 }
 
 void setpointsConfig(){
-  HTTPClient http;
-  http.begin(wifiClient, SERVER_ADDRESS + "/config");  //Specify request destination
+  HTTPClient http2;
+  http2.begin(wifiClient, SERVER_ADDRESS + "/config");  //Specify request destination
   int httpCode;
   int tries = 0;
   
   do{
-    httpCode = http.GET();                  //Send the request
+    httpCode = http2.GET();                  //Send the request
     Serial.println("Response: " + String(httpCode));
     
     tries += 1;
     if (httpCode > 0) { //Check the returning code
    
-      String payload = http.getString();   //Get the request response payload
+      String payload = http2.getString();   //Get the request response payload
       JSONVar response = JSON.parse(payload);
   
       Serial.println(response);  
@@ -454,7 +454,7 @@ void setpointsConfig(){
     }
   }while(httpCode < 0 && tries < 3);
   
-  http.end();   //Close connection
+  http2.end();   //Close connection
 }
 
 void drawDashboard(){

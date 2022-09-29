@@ -60,11 +60,20 @@ WiFiMulti wifiMulti;
 WiFiClient wifiClient;
 HTTPClient http;
 
+// Networks
+char *redes[3][2] = {
+  {"TheCoolestWiFiLM", "LopezMurillo128"},
+  {"WifiLM", "LopezMurillo128"},
+  {"Honor 10 Lite", "tommywashere"}
+};
+
+
 //Global variables
 float hum;
 float temp;
 float light;
 float soilMoisture;
+String cameraIP="";
 
 bool needsToMeasure = false; // Bandera para tomar medidas
 bool showAnimation = false;  // Intercambia entre animacion / estado
@@ -133,11 +142,49 @@ void taskSensorCode(void * pvParameter){
   }
 }
 
+void logOnScreen(String message){
+  tft.fillRect(10, 220, 230, 20, TFT_BLACK);
+  tft.setCursor(10, 230);
+  tft.setFreeFont(&FreeSans9pt7b);
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.print(message);
+  Serial.println(message);
+}
+
+void processMessage(String message){
+  String tipo = message.substring(0, 4);
+  Serial.println("New message: " + message);
+  if(tipo == "wifi"){
+    String ssid = WiFi.SSID();
+    String password;
+    for(auto red : redes){
+      if(String(red[0]) == ssid){
+        password = String(red[1]);
+        break;
+      }
+    }
+
+    String payload = ssid + '\x0' + password;
+    Serial.println(payload);
+    Serial.println(payload.indexOf('\x0'));
+
+  }else if(tipo == "myip"){
+    cameraIP = message.substring(4);
+    Serial.println("Camera IP: " + cameraIP);
+  }else{
+    logOnScreen(message);
+  }
+}
+
 void taskScreenCode(void * pvParameter){
   Serial.print("Screen Task running on core ");
   Serial.println(xPortGetCoreID());
   
   while(true){
+    if(Serial.available() > 0){
+      String message = Serial.readString();
+      processMessage(message);
+    }
     if(showAnimation){
       displayAnimation();
     }else{
@@ -212,13 +259,6 @@ void notificationSound(){
   noTone(BUZZER_PIN);
   
 }
-
-// Networks
-char *redes[3][2] = {
-  {"TheCoolestWiFiLM", "LopezMurillo128"},
-  {"WifiLM", "LopezMurillo128"},
-  {"Honor 10 Lite", "tommywashere"}
-};
 
 void updateStatus(){
   EstadoPlanta anterior = estado;
@@ -351,6 +391,10 @@ void loop() {
 
 void sendData(){
   String body = "temperatura=" + String(temp) + "&humedad_ambiente=" + String(hum) + "&luminosidad=" + String(light) + "&humedad_tierra=" + String(soilMoisture);
+  if(cameraIP != ""){
+    body += "&camera_ip=" + cameraIP;
+  }
+  
   Serial.println(body); 
   
   int httpCode = http.PUT(body);                    //Send the request
@@ -477,7 +521,7 @@ void drawDashboard(){
   }
 
   tft.fillRect(20, 70, 210, 45, TFT_BLACK);
-  tft.fillRect(20, 190, 210, 45, TFT_BLACK);
+  tft.fillRect(20, 190, 210, 30, TFT_BLACK);
   
   tft.setCursor(20, 90);
   tft.print(String(temp) + "°C");

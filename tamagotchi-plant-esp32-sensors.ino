@@ -48,7 +48,6 @@ const byte BUZZER_PIN = 32;
  * CS not implemented, BLK to air
  */
 
-
 // Object declarations
 hw_timer_t * timer = NULL;      // Hardware timer
 
@@ -61,24 +60,26 @@ WiFiClient wifiClient;
 HTTPClient http;
 
 // Networks
-char *redes[3][2] = {
+char *redes[4][2] = {
   {"TheCoolestWiFiLM", "LopezMurillo128"},
   {"WifiLM", "LopezMurillo128"},
-  {"Honor 10 Lite", "tommywashere"}
+  {"Honor 10 Lite", "tommywashere"},
+  {"redMolina2.4G", "Molina_2021"}
 };
-
 
 //Global variables
 float hum;
 float temp;
 float light;
 float soilMoisture;
-String cameraIP="";
 
-bool needsToMeasure = false; // Bandera para tomar medidas
-bool showAnimation = false;  // Intercambia entre animacion / estado
-bool animationDisplayed = false; // La animacion ya se mostró?
-bool measureDisplayed = false; // Las mediciones ya se actualizaron?
+String cameraIP="";
+String plantName = "";
+
+bool needsToMeasure = false;      // Bandera para tomar medidas
+bool showAnimation = false;       // Intercambia entre animacion / estado
+bool animationDisplayed = false;  // La animacion ya se mostró?
+bool measureDisplayed = false;    // Las mediciones ya se actualizaron?
 bool spritesDisplayed = false;
 int measuresCounter = 0;
 
@@ -88,14 +89,6 @@ const byte TOUCH_PIN = 12;
 const byte INT_LED = 21;
 const int DEBOUNCE = 100;
 int lastMillis = 0;
-
-void IRAM_ATTR changeState(){
-  if(millis() - lastMillis > DEBOUNCE){ // Software debouncing
-    showAnimation = !showAnimation;
-    digitalWrite(INT_LED, showAnimation);
- }
- lastMillis = millis();
-}
 
 void touched(){
   if(millis() - lastMillis > DEBOUNCE){ // Software debouncing
@@ -116,7 +109,6 @@ void initInterrupt(){
   timerAlarmWrite(timer, 2500000, true);
   timerAlarmEnable(timer);
   
-  //attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), changeState, FALLING);
   touchAttachInterrupt(TOUCH_PIN, touched, 20);
 }
 
@@ -127,6 +119,7 @@ TaskHandle_t TaskScreen;
 void taskSensorCode(void * pvParameter){
   Serial.print("Sensor Task running on core ");
   Serial.println(xPortGetCoreID());
+  
   
   while(true){
     if(needsToMeasure){
@@ -147,8 +140,8 @@ void logOnScreen(String message){
   tft.setCursor(10, 230);
   tft.setFreeFont(&FreeSans9pt7b);
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
-  tft.print(message);
-  Serial.println(message);
+  tft.print("> " + message);
+  Serial.println("> " + message);
 }
 
 void processMessage(String message){
@@ -185,6 +178,7 @@ void taskScreenCode(void * pvParameter){
       String message = Serial.readString();
       processMessage(message);
     }
+    
     if(showAnimation){
       displayAnimation();
     }else{
@@ -333,13 +327,14 @@ void setup() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.pushImage(INTRO_OFFSET_X, INTRO_OFFSET_Y, INTRO_WIDTH, INTRO_HEIGHT, INTRO_SPRITE);
   tft.setFreeFont(&FreeSans9pt7b);
-  tft.setCursor(0, 205);
+  tft.setCursor(0, 185);
   tft.setTextColor(TFT_BLACK, TFT_WHITE);
   tft.println("Sensors setup...");
   
   // Init I2C
   Wire.begin(SDA_LIGHT, SCL_LIGHT);
   //Init light meter
+  
   while(! lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE_2, 0x23, &Wire) ){
     Serial.println("Error on BH1750 init...");
     digitalWrite(TEST_LED, HIGH);
@@ -369,6 +364,7 @@ void setup() {
     Serial.print(++i); Serial.print(' ');
     tft.print(".");
   }
+  tft.println();
 
   http.begin(wifiClient, SERVER_ADDRESS);  //Specify request destination
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -380,7 +376,7 @@ void setup() {
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP());
   notificationSound();
-  
+
   setpointsConfig();
   createTasks();
 }
@@ -402,18 +398,9 @@ void sendData(){
 
 
   if (httpCode > 0) { //Check the returning code
- 
-    String payload = http.getString();   //Get the request response payload
-    JSONVar response = JSON.parse(payload);
-
-    if (JSON.typeof(response) != "undefined" && response.hasOwnProperty("title"))
-    {
-      Serial.println(response["title"]);
-    }
-    else
-    {
-      Serial.println(response);
-    }
+    logOnScreen("Ok: " + String(httpCode));
+  }else{
+    logOnScreen("Error: " + String(httpCode));
   }
  
   //http.end();   //Close connection
@@ -481,6 +468,9 @@ void setpointsConfig(){
         if(response.hasOwnProperty("min_humt")){
           min_humt = json2double(response["min_humt"]);
         }
+        if(response.hasOwnProperty("name")){
+          plantName = response["name"];
+        }
 
         Serial.println("Maxima temperatura: " + String(max_temp));
         Serial.println("Minima temperatura: " + String(min_temp));
@@ -520,8 +510,8 @@ void drawDashboard(){
     spritesDisplayed = true;
   }
 
-  tft.fillRect(20, 70, 210, 45, TFT_BLACK);
-  tft.fillRect(20, 190, 210, 30, TFT_BLACK);
+  tft.fillRect(20, 70, 210, 40, TFT_BLACK);
+  tft.fillRect(20, 190, 210, 25, TFT_BLACK);
   
   tft.setCursor(20, 90);
   tft.print(String(temp) + "°C");
@@ -574,6 +564,12 @@ void drawDashboard(){
   }else if(soilMoisture < min_humt){
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
     tft.print("*");
+  }
+
+  if(plantName != ""){
+   tft.setTextColor(TFT_WHITE, TFT_BLACK);
+   tft.setCursor(120 - plantName.length()*5, 120);
+   tft.print(plantName); 
   }
 
   measureDisplayed = true;

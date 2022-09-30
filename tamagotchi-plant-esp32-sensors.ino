@@ -86,6 +86,7 @@ bool animationDisplayed = false;  // La animacion ya se mostró?
 bool measureDisplayed = false;    // Las mediciones ya se actualizaron?
 bool spritesDisplayed = false;
 int measuresCounter = 0;
+int lastGreeting = 0;
 
 /*   INTERRUPCIONES    */
 const byte INTERRUPT_PIN = 32;
@@ -140,7 +141,10 @@ void taskSensorCode(void * pvParameter){
 }
 
 void logOnScreen(String message){
-  tft.fillRect(10, 220, 230, 20, TFT_BLACK);
+  if((millis() - lastGreeting)< 5000){
+    return;
+  }
+  tft.fillRect(10, 215, 230, 25, TFT_BLACK);
   tft.setCursor(10, 230);
   tft.setFreeFont(&FreeSans9pt7b);
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
@@ -149,8 +153,14 @@ void logOnScreen(String message){
 }
 
 void processMessage(String message){
+  message.trim();
+  if(message == ""){
+    return;
+  }
+  
   String tipo = message.substring(0, 4);
   Serial.println("New message: " + message);
+  
   if(tipo == "wifi"){
     String ssid = WiFi.SSID();
     String password;
@@ -168,7 +178,18 @@ void processMessage(String message){
   }else if(tipo == "myip"){
     cameraIP = message.substring(4);
     Serial.println("Camera IP: " + cameraIP);
-  }else{
+  }else if(tipo == "hola"){
+    // TODO carita saludando
+    String greeting = message.substring(4);
+    tft.fillRect(10, 215, 230, 25, TFT_BLACK);
+    tft.setCursor(10, 230);
+    tft.setFreeFont(&FreeSans9pt7b);
+    tft.setTextColor(TFT_PINK, TFT_BLACK);
+    tft.print("Hola " + greeting + "! :)");
+    Serial.println("Saludo a " + greeting);
+    lastGreeting = millis();
+  }
+  else{
     logOnScreen(message);
   }
 }
@@ -185,6 +206,7 @@ void taskScreenCode(void * pvParameter){
     if(mySerial.available() > 0){
       String msg = mySerial.readString();
       Serial.println(msg);
+      processMessage(msg);
     }
     
     if(showAnimation){

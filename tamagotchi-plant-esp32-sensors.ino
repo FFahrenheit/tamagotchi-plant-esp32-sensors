@@ -8,6 +8,7 @@
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <HTTPClient.h>
+#include <SoftwareSerial.h>
 
 #include "assets/ok.h";
 #include "assets/encandilado.h";
@@ -58,6 +59,9 @@ TFT_eSPI tft = TFT_eSPI();
 WiFiMulti wifiMulti;
 WiFiClient wifiClient;
 HTTPClient http;
+SoftwareSerial mySerial;
+const byte MY_RX = 13;
+const byte MY_TX  = 14;
 
 // Networks
 char *redes[4][2] = {
@@ -177,6 +181,10 @@ void taskScreenCode(void * pvParameter){
     if(Serial.available() > 0){
       String message = Serial.readString();
       processMessage(message);
+    }
+    if(mySerial.available() > 0){
+      String msg = mySerial.readString();
+      Serial.println(msg);
     }
     
     if(showAnimation){
@@ -319,6 +327,7 @@ void setup() {
   // Init Serial port
   Serial.begin(115200);
   Serial.println("Init...");
+  mySerial.begin(9600, SWSERIAL_8N1, MY_RX, MY_TX, false);
 
   //Init screen
   tft.init();
@@ -510,7 +519,7 @@ void drawDashboard(){
     spritesDisplayed = true;
   }
 
-  tft.fillRect(20, 70, 210, 40, TFT_BLACK);
+  tft.fillRect(20, 70, 210, 60, TFT_BLACK);
   tft.fillRect(20, 190, 210, 25, TFT_BLACK);
   
   tft.setCursor(20, 90);
@@ -568,8 +577,9 @@ void drawDashboard(){
 
   if(plantName != ""){
    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-   tft.setCursor(120 - plantName.length()*5, 120);
-   tft.print(plantName); 
+   tft.setCursor(120 - plantName.length()*7, 120);
+   tft.setTextDatum(MC_DATUM);
+   tft.drawCentreString(plantName, 120, 110, 2); 
   }
 
   measureDisplayed = true;
